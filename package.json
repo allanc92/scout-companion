@@ -1,0 +1,25 @@
+{
+  "name": "scout-companion",
+  "version": "1.0.0",
+  "description": "Welcome to **Scout**, the AI-powered sports buddy who brings *banter, brains, and heart* to every college football conversation. Scout isn’t just a bot — it’s a fan-savvy friend who knows the rivalries, reads the room, and delivers takes with personality.",
+  "main": "index.js",
+  "scripts": {
+  "test": "echo \"Error: no test specified\" && exit 1",
+  "start": "node src/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/allanc92/scout-companion.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/allanc92/scout-companion/issues"
+  },
+  "homepage": "https://github.com/allanc92/scout-companion#readme",
+  "dependencies": {
+    "discord.js": "^14.22.1",
+    "dotenv": "^17.2.1"
+  }
+}
