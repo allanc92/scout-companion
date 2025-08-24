@@ -4,6 +4,27 @@ require('dotenv').config();
 
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 
+// Azure OpenAI client (initialized if env vars present and import succeeds)
+let openaiClient = null;
+let azureAvailable = false;
+
+(async function initAzureOpenAI() {
+  try {
+    if (process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_API_KEY && process.env.AZURE_OPENAI_DEPLOYMENT) {
+      const { OpenAIClient } = await import('@azure/openai');
+      const { AzureKeyCredential } = await import('@azure/core-auth');
+      openaiClient = new OpenAIClient(process.env.AZURE_OPENAI_ENDPOINT, new AzureKeyCredential(process.env.AZURE_OPENAI_API_KEY));
+      azureAvailable = true;
+      console.log('✅ Azure OpenAI client initialized');
+    } else {
+      console.log('⚠️ Azure OpenAI env vars missing; skipping initialization');
+    }
+  } catch (err) {
+    console.error('❌ Azure OpenAI initialization failed:', err && err.message ? err.message : err);
+    azureAvailable = false;
+  }
+})();
+
 // Create the Scout-companion client
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -36,6 +57,24 @@ client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
+async function getScoutResponse(prompt) {
+  if (!azureAvailable || !openaiClient) {
+    throw new Error('Azure OpenAI not configured');
+  }
+
+  const response = await openaiClient.getChatCompletions(
+    process.env.AZURE_OPENAI_DEPLOYMENT,
+    [
+      { role: 'system', content: 'You are Scout, a warm, emotionally intelligent AI companion who responds with empathy, clarity, and a touch of playfulness.' },
+      { role: 'user', content: prompt }
+    ],
+    { temperature: 0.8, maxTokens: 800 }
+  );
+
+  // Response shape: response.choices[0].message.content
+  return response.choices?.[0]?.message?.content || 'No response from AI';
+}
+
 // Handle interactions
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
@@ -49,8 +88,19 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (interaction.commandName === 'scout') {
+    const prompt = interaction.options.getString('prompt');
     await interaction.deferReply();
-    await interaction.editReply('Scout AI is currently offline for maintenance.');
+    try {
+      if (!azureAvailable) {
+        await interaction.editReply('Scout AI is currently offline for maintenance.');
+        return;
+      }
+      const response = await getScoutResponse(prompt);
+      await interaction.editReply(response);
+    } catch (err) {
+      console.error('Error while fetching Scout response:', err);
+      await interaction.editReply('Sorry, Scout had trouble connecting to the AI service.');
+    }
   }
 });
 
