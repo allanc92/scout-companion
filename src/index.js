@@ -8,7 +8,7 @@ const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require
 let openaiClient = null;
 let azureAvailable = false;
 
-(async function initAzureOpenAI() {
+async function initAzureOpenAI() {
   try {
     if (process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_API_KEY && process.env.AZURE_OPENAI_DEPLOYMENT) {
       const { OpenAIClient } = await import('@azure/openai');
@@ -23,7 +23,7 @@ let azureAvailable = false;
     console.error('❌ Azure OpenAI initialization failed:', err && err.message ? err.message : err);
     azureAvailable = false;
   }
-})();
+}
 
 // Create the Scout-companion client
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -105,4 +105,10 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // Start the companion
-registerCommands().then(() => client.login(process.env.DISCORD_TOKEN));
+async function startBot() {
+  await initAzureOpenAI();
+  await registerCommands();
+  await client.login(process.env.DISCORD_TOKEN);
+}
+
+startBot().catch(console.error);
