@@ -40,6 +40,21 @@ async function registerCommands() {
 // When Scout is ready
 client.once('ready', () => {
   console.log(`✅ Scout is ONLINE! Logged in as ${client.user.tag}`);
+  console.log(`🎯 Bot ID: ${client.user.id}`);
+  console.log(`🏰 Connected to ${client.guilds.cache.size} servers`);
+  
+  // List all guilds for debugging
+  client.guilds.cache.forEach(guild => {
+    console.log(`📍 Server: ${guild.name} (ID: ${guild.id})`);
+  });
+  
+  console.log(`🎯 Target Guild ID: ${process.env.GUILD_ID}`);
+  const targetGuild = client.guilds.cache.get(process.env.GUILD_ID);
+  if (targetGuild) {
+    console.log(`✅ Found target server: ${targetGuild.name}`);
+  } else {
+    console.log(`❌ Bot is NOT in the target server! Check bot permissions.`);
+  }
 });
 
 // Handle slash command interactions
