@@ -3,7 +3,7 @@ require('dotenv').config();
 
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 
-console.log('🚀 Starting Scout...');
+console.log('🚀 Starting Scout... [FORCE REFRESH]');
 console.log('📊 Environment check:');
 console.log('- DISCORD_TOKEN:', process.env.DISCORD_TOKEN ? 'Set ✅' : 'Missing ❌');
 console.log('- CLIENT_ID:', process.env.CLIENT_ID ? 'Set ✅' : 'Missing ❌');
