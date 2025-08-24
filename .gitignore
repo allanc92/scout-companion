@@ -1,3 +1,11 @@
 .env
+.env.local
+.env.*.local
 node_modules/
+npm-debug.log*
+.DS_Store
+
+# Prevent committing package-lock.json that lives inside any node_modules folder
+# (do NOT ignore the repo root package-lock.json)
+**/node_modules/**/package-lock.json
 # Add other files/folders to ignore below
