@@ -4,61 +4,6 @@ require('dotenv').config();
 
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 
-// Azure OpenAI setup with safe error handling
-let openaiClient = null;
-let azureAvailable = false;
-
-try {
-  if (process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_API_KEY && process.env.AZURE_OPENAI_DEPLOYMENT) {
-    const AzureOpenAI = require('@azure/openai');
-    const { AzureKeyCredential } = require('@azure/core-auth');
-    
-    // Try different import patterns for v2.x
-    const OpenAIClient = AzureOpenAI.OpenAIClient || AzureOpenAI.default || AzureOpenAI;
-    
-    openaiClient = new OpenAIClient(
-      process.env.AZURE_OPENAI_ENDPOINT,
-      new AzureKeyCredential(process.env.AZURE_OPENAI_API_KEY)
-    );
-    azureAvailable = true;
-    console.log('✅ Azure OpenAI client initialized');
-  } else {
-    console.log('⚠️ Azure OpenAI env vars missing; only Discord commands will work');
-  }
-} catch (err) {
-  console.error('❌ Azure OpenAI initialization failed:', err.message);
-  console.log('📌 Discord bot will still work, but /scout command will be disabled');
-  azureAvailable = false;
-}
-
-async function getScoutResponse(prompt) {
-  if (!azureAvailable || !openaiClient) {
-    throw new Error('Azure OpenAI not available');
-  }
-
-  try {
-    const response = await openaiClient.getChatCompletions(
-      process.env.AZURE_OPENAI_DEPLOYMENT,
-      [
-        { 
-          role: 'system', 
-          content: 'You are Scout, a warm, emotionally intelligent AI companion who responds with empathy, clarity, and a touch of playfulness about sports and college football.' 
-        },
-        { role: 'user', content: prompt }
-      ],
-      { 
-        temperature: 0.8, 
-        maxTokens: 800 
-      }
-    );
-
-    return response.choices?.[0]?.message?.content || 'No response generated';
-  } catch (err) {
-    console.error('Azure OpenAI API call failed:', err.message);
-    throw new Error('AI service temporarily unavailable');
-  }
-}
-
 // Create the Scout-companion client
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -104,21 +49,8 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (interaction.commandName === 'scout') {
-    const prompt = interaction.options.getString('prompt');
     await interaction.deferReply();
-    
-    try {
-      if (!azureAvailable) {
-        await interaction.editReply('🔧 Scout AI is currently offline for maintenance. Try /ping or /kickoff instead!');
-        return;
-      }
-      
-      const response = await getScoutResponse(prompt);
-      await interaction.editReply(response);
-    } catch (err) {
-      console.error('Error in /scout command:', err.message);
-      await interaction.editReply('🤖 Sorry, Scout had trouble connecting to the AI service. Please try again later!');
-    }
+    await interaction.editReply('Scout AI is currently offline for maintenance.');
   }
 });
 
