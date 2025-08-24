@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node diagnostic.js"
+    "start": "node simple-diagnostic.js"
   },
   "repository": {
     "type": "git",
