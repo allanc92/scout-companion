@@ -4,6 +4,10 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 
 console.log('🚀 Starting Scout...');
+console.log('📊 Environment check:');
+console.log('- DISCORD_TOKEN:', process.env.DISCORD_TOKEN ? 'Set ✅' : 'Missing ❌');
+console.log('- CLIENT_ID:', process.env.CLIENT_ID ? 'Set ✅' : 'Missing ❌');
+console.log('- GUILD_ID:', process.env.GUILD_ID ? 'Set ✅' : 'Missing ❌');
 
 // Create the Scout-companion client
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });

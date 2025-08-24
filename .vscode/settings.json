@@ -1,0 +1,8 @@
+{
+    "appService.zipIgnorePattern": [
+        "node_modules{,/**}",
+        ".vscode{,/**}"
+    ],
+    "appService.defaultWebAppToDeploy": "/subscriptions/5fbbec86-b480-496d-8d69-596c3442efc2/resourceGroups/scoutcompanionrg/providers/Microsoft.Web/sites/scout-companion",
+    "appService.deploySubpath": "."
+}
