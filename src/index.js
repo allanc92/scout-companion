@@ -1,6 +1,6 @@
 
 require('dotenv').config();
-const { OpenAIClient } = require("@azure/openai");
+const OpenAIClient = require("@azure/openai").OpenAIClient;
 const { AzureKeyCredential } = require("@azure/core-auth");
 
 const openaiClient = new OpenAIClient(
