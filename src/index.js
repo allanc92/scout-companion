@@ -3,15 +3,14 @@ require('dotenv').config();
 
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 
-// AI features temporarily disabled for stability
-let aiAvailable = false;
+console.log('🚀 Starting Scout...');
 
 // Create the Scout-companion client
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 // Define slash commands
 const commands = [
-  new SlashCommandBuilder().setName('ping').setDescription('Check if Scout-companion is awake'),
+  new SlashCommandBuilder().setName('ping').setDescription('Check if Scout is awake'),
   new SlashCommandBuilder().setName('kickoff').setDescription('Morning Kickoff — quick update'),
   new SlashCommandBuilder()
     .setName('scout')
@@ -25,36 +24,61 @@ const commands = [
 
 // Register commands with Discord
 async function registerCommands() {
+  console.log('📝 Registering commands...');
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   await rest.put(
     Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
     { body: commands }
   );
-  console.log('✅ Slash commands registered');
+  console.log('✅ Slash commands registered successfully');
 }
 
-// When Scout-companion is ready
+// When Scout is ready
 client.once('ready', () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
+  console.log(`✅ Scout is ONLINE! Logged in as ${client.user.tag}`);
 });
 
-// Handle interactions
+// Handle slash command interactions
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
-  if (interaction.commandName === 'ping') {
-    await interaction.reply('Scout-companion reporting for duty. 🏈');
-  }
+  console.log(`📢 Received command: ${interaction.commandName}`);
 
-  if (interaction.commandName === 'kickoff') {
-    await interaction.reply('Morning Kickoff: Coffee hot, takes hotter. What team are you watching today?');
-  }
+  try {
+    if (interaction.commandName === 'ping') {
+      await interaction.reply('🏈 Scout reporting for duty! I\'m alive and ready!');
+    }
 
-  if (interaction.commandName === 'scout') {
-    await interaction.deferReply();
-    await interaction.editReply('🔧 Scout AI is temporarily offline for maintenance. I\'m working great with /ping and /kickoff though! 🏈');
+    if (interaction.commandName === 'kickoff') {
+      await interaction.reply('☕ Morning Kickoff: Coffee hot, takes hotter. What team are you watching today?');
+    }
+
+    if (interaction.commandName === 'scout') {
+      await interaction.deferReply();
+      await interaction.editReply('🔧 Hey there! Scout AI is taking a timeout for maintenance. I\'m still great at /ping and /kickoff though! 🏈');
+    }
+  } catch (error) {
+    console.error('❌ Command error:', error);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply('😅 Oops! Something went wrong, but I\'m still here!');
+    }
   }
 });
 
-// Start the companion
-registerCommands().then(() => client.login(process.env.DISCORD_TOKEN));
+// Error handling
+client.on('error', (error) => {
+  console.error('❌ Discord client error:', error);
+});
+
+process.on('unhandledRejection', (error) => {
+  console.error('❌ Unhandled promise rejection:', error);
+});
+
+// Start Scout
+console.log('🔑 Logging into Discord...');
+registerCommands()
+  .then(() => client.login(process.env.DISCORD_TOKEN))
+  .catch(error => {
+    console.error('❌ Failed to start Scout:', error);
+    process.exit(1);
+  });
