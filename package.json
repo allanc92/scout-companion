@@ -20,6 +20,7 @@
   "homepage": "https://github.com/allanc92/scout-companion#readme",
   "dependencies": {
     "discord.js": "^14.22.1",
-    "dotenv": "^17.2.1"
+    "dotenv": "^17.2.1",
+    "openai": "^5.15.0"
   }
 }

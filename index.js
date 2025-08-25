@@ -2,8 +2,21 @@
 require('dotenv').config();
 
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { OpenAI } = require('openai');
 
 console.log('🚀 Starting Scout Discord Bot with WhatsApp-style monitoring...');
+
+// Azure OpenAI Configuration
+const openai = new OpenAI({
+  apiKey: process.env.AZURE_OPENAI_API_KEY,
+  baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/${process.env.AZURE_OPENAI_DEPLOYMENT}`,
+  defaultQuery: { 'api-version': '2024-05-01-preview' },
+  defaultHeaders: {
+    'api-key': process.env.AZURE_OPENAI_API_KEY,
+  },
+});
+
+console.log('🤖 Azure OpenAI configured for GPT-5');
 
 // WhatsApp-style Message Monitor
 class WhatsAppMonitor {
@@ -39,8 +52,8 @@ class WhatsAppMonitor {
           // Show typing indicator
           await message.channel.sendTyping();
           
-          // Get response (simple for now)
-          const response = this.getResponse(message.content);
+          // Get AI response from Azure OpenAI
+          const response = await this.getAIResponse(message.content, message.author.displayName);
           
           // Reply to the message
           await message.reply(response);
@@ -50,10 +63,22 @@ class WhatsAppMonitor {
           this.responseCount++;
           this.cooldownUntil = Date.now() + (this.cooldownSeconds * 1000);
           
-          console.log(`✅ WhatsApp response sent! (${this.responseCount}/${this.maxResponsesPerHour} this hour)`);
+          console.log(`✅ WhatsApp AI response sent! (${this.responseCount}/${this.maxResponsesPerHour} this hour)`);
           
         } catch (error) {
           console.error('❌ WhatsApp response error:', error);
+          
+          // Fallback to simple response if AI fails
+          const fallbackResponse = this.getFallbackResponse();
+          try {
+            await message.reply(fallbackResponse);
+            this.lastResponse = Date.now();
+            this.responseCount++;
+            this.cooldownUntil = Date.now() + (this.cooldownSeconds * 1000);
+            console.log(`⚠️ Fallback response sent due to AI error`);
+          } catch (fallbackError) {
+            console.error('❌ Even fallback failed:', fallbackError);
+          }
         }
       }
     });
@@ -83,7 +108,37 @@ class WhatsAppMonitor {
     return footballTriggers.some(trigger => content.includes(trigger));
   }
   
-  getResponse(originalMessage) {
+  async getAIResponse(message, userName) {
+    console.log(`🤖 Getting AI response for: "${message}"`);
+    
+    try {
+      const completion = await openai.chat.completions.create({
+        model: process.env.AZURE_OPENAI_DEPLOYMENT,
+        messages: [
+          {
+            role: "system",
+            content: `You are Scout, a friendly college football enthusiast who loves chatting about CFB in Discord. You're responding naturally in a group chat like WhatsApp - keep it casual, fun, and friend-like. Use emojis, be enthusiastic about college football, and respond as if you're just hanging out with friends. Keep responses concise (1-3 sentences max) unless asked for detailed analysis. The user's name is ${userName}.`
+          },
+          {
+            role: "user", 
+            content: message
+          }
+        ],
+        max_tokens: 150,
+        temperature: 0.8
+      });
+      
+      const response = completion.choices[0].message.content.trim();
+      console.log(`✅ AI response generated: "${response}"`);
+      return response;
+      
+    } catch (error) {
+      console.error('❌ Azure OpenAI error:', error);
+      throw error;
+    }
+  }
+  
+  getFallbackResponse() {
     const responses = [
       "🏈 I heard my name! What's up with college football today?",
       "👋 Hey there! Ready to talk some CFB?",
@@ -206,10 +261,33 @@ client.on('interactionCreate', async (interaction) => {
       
       console.log(`🎯 Scout command: "${prompt}"`);
       
-      // Simple response for now
-      const response = `🏈 You asked: "${prompt}"\n\nI'm Scout, your college football buddy! Right now I'm running in basic mode, but I'm ready to chat about CFB! 🌟`;
-      
-      await interaction.editReply(response);
+      try {
+        // Get AI response
+        const completion = await openai.chat.completions.create({
+          model: process.env.AZURE_OPENAI_DEPLOYMENT,
+          messages: [
+            {
+              role: "system",
+              content: "You are Scout, a knowledgeable and enthusiastic college football companion. Provide helpful, friendly responses about college football topics. Be conversational and use emojis appropriately."
+            },
+            {
+              role: "user", 
+              content: prompt
+            }
+          ],
+          max_tokens: 300,
+          temperature: 0.7
+        });
+        
+        const response = completion.choices[0].message.content.trim();
+        await interaction.editReply(response);
+        console.log(`✅ AI slash command response sent`);
+        
+      } catch (error) {
+        console.error('❌ AI slash command error:', error);
+        const fallbackResponse = `🏈 You asked: "${prompt}"\n\nI'm Scout, your college football buddy! I'm having a moment with my AI brain, but I'm still here to chat about CFB! Try asking me again in a moment. 🌟`;
+        await interaction.editReply(fallbackResponse);
+      }
     }
   } catch (error) {
     console.error('❌ Command error:', error);
@@ -233,6 +311,9 @@ console.log('📊 Environment check:');
 console.log('- DISCORD_TOKEN:', process.env.DISCORD_TOKEN ? 'Set ✅' : 'Missing ❌');
 console.log('- CLIENT_ID:', process.env.CLIENT_ID ? 'Set ✅' : 'Missing ❌');
 console.log('- GUILD_ID:', process.env.GUILD_ID ? 'Set ✅' : 'Missing ❌');
+console.log('- AZURE_OPENAI_ENDPOINT:', process.env.AZURE_OPENAI_ENDPOINT ? 'Set ✅' : 'Missing ❌');
+console.log('- AZURE_OPENAI_API_KEY:', process.env.AZURE_OPENAI_API_KEY ? 'Set ✅' : 'Missing ❌');
+console.log('- AZURE_OPENAI_DEPLOYMENT:', process.env.AZURE_OPENAI_DEPLOYMENT ? 'Set ✅' : 'Missing ❌');
 
 // Start Scout
 console.log('🔑 Starting Scout...');
