@@ -3,6 +3,7 @@ name: Deploy main to Azure
 on:
   push:
     branches: [ main ]
+  workflow_dispatch: # Allow manual deployment
 
 jobs:
   build-and-deploy:
@@ -15,16 +16,30 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build (no-op)
-        run: echo "No build step configured"
+      - name: Create .env file for Azure
+        run: |
+          echo "NODE_ENV=production" > .env
+          echo "PORT=8080" >> .env
+          echo "DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}" >> .env
+          echo "CLIENT_ID=${{ secrets.CLIENT_ID }}" >> .env
+          echo "GUILD_ID=${{ secrets.GUILD_ID }}" >> .env
+          echo "AZURE_OPENAI_API_KEY=${{ secrets.AZURE_OPENAI_API_KEY }}" >> .env
+          echo "AZURE_OPENAI_ENDPOINT=${{ secrets.AZURE_OPENAI_ENDPOINT }}" >> .env
+          echo "AZURE_OPENAI_DEPLOYMENT=${{ secrets.AZURE_OPENAI_DEPLOYMENT }}" >> .env
+          echo "ENABLE_MESSAGE_MONITORING=${{ secrets.ENABLE_MESSAGE_MONITORING || 'false' }}" >> .env
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
         with:
-          app-name: 'scout-companion'
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME || 'scout-companion' }}
           package: '.'
