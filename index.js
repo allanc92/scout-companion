@@ -201,8 +201,8 @@ async function registerCommands() {
   console.log('✅ Commands registered');
 }
 
-// When Scout is ready
-client.once('ready', () => {
+// When Scout is ready (using clientReady for Discord.js v14+)
+client.once('clientReady', () => {
   console.log(`✅ Scout is ONLINE! Logged in as ${client.user.tag}`);
   console.log(`🏰 Connected to ${client.guilds.cache.size} servers`);
   
