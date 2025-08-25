@@ -1,4 +1,6 @@
 // Deployment Verification Script
+require('dotenv').config(); // Load environment variables
+
 console.log('🔍 Scout Deployment Verification');
 console.log('================================');
 console.log();
