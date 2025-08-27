@@ -3,6 +3,7 @@ require('dotenv').config();
 
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const { OpenAI } = require('openai');
+const axios = require('axios');
 
 // 🎯 FEATURE FLAGS CONFIGURATION
 const FEATURES = {
@@ -11,7 +12,12 @@ const FEATURES = {
   testingMode: process.env.TESTING_MODE === 'true',
   healthEndpoint: process.env.ENABLE_HEALTH_ENDPOINT === 'true',
   enhancedLogging: process.env.ENHANCED_LOGGING === 'true',
-  featureBranch: process.env.FEATURE_BRANCH || 'main'
+  featureBranch: process.env.FEATURE_BRANCH || 'main',
+  
+  // 🔍 INTEGRATION FEATURES (Phase by Phase)
+  webSearch: process.env.ENABLE_WEB_SEARCH === 'true',
+  realTimeData: process.env.ENABLE_REAL_TIME_DATA === 'true',
+  collegeFootball: process.env.ENABLE_COLLEGE_FOOTBALL === 'true'
 };
 
 // Log feature flag status
@@ -45,6 +51,316 @@ const openai = new OpenAI({
 });
 
 console.log('🤖 Azure OpenAI configured for GPT-5');
+
+// 🔍 INTEGRATION CONFIGURATIONS (Modular & Separate)
+// Each integration lives in its own segment to prevent code intertwining
+
+// Phase 1: Web Search Integration
+const WEB_SEARCH_CONFIG = {
+  enabled: FEATURES.webSearch,
+  provider: 'bing',
+  apiKey: process.env.BING_SEARCH_API_KEY,
+  endpoint: process.env.BING_SEARCH_ENDPOINT || 'https://api.bing.microsoft.com/v7.0/search',
+  maxResults: 5,
+  safeSearch: 'Moderate'
+};
+
+// Phase 2: Real-time Data Integration  
+const REAL_TIME_DATA_CONFIG = {
+  enabled: FEATURES.realTimeData,
+  sources: {
+    sports: {
+      provider: 'espn',
+      apiKey: process.env.ESPN_API_KEY,
+      endpoint: process.env.ESPN_API_ENDPOINT
+    },
+    news: {
+      provider: 'newsapi',
+      apiKey: process.env.NEWS_API_KEY,
+      endpoint: process.env.NEWS_API_ENDPOINT
+    },
+    weather: {
+      provider: 'openweather',
+      apiKey: process.env.WEATHER_API_KEY,
+      endpoint: process.env.WEATHER_API_ENDPOINT
+    }
+  }
+};
+
+// Phase 3: College Football Integration
+const COLLEGE_FOOTBALL_CONFIG = {
+  enabled: FEATURES.collegeFootball,
+  sources: {
+    collegeCFB: {
+      provider: 'collegefootballdata',
+      apiKey: process.env.CFB_DATA_API_KEY,
+      endpoint: process.env.CFB_DATA_ENDPOINT
+    },
+    espnCollege: {
+      provider: 'espn_college',
+      endpoint: process.env.ESPN_COLLEGE_ENDPOINT
+    }
+  },
+  conferences: ['SEC', 'Big Ten', 'ACC', 'Big 12', 'Pac-12'],
+  favoriteTeams: process.env.FAVORITE_TEAMS?.split(',') || []
+};
+
+console.log('🔧 Integration configs loaded:');
+console.log(`   🔍 Web Search: ${WEB_SEARCH_CONFIG.enabled ? '✅' : '❌'}`);
+console.log(`   📊 Real-time Data: ${REAL_TIME_DATA_CONFIG.enabled ? '✅' : '❌'}`);
+console.log(`   🏈 College Football: ${COLLEGE_FOOTBALL_CONFIG.enabled ? '✅' : '❌'}`);
+
+// 🔍 PHASE 1: INTELLIGENT WEB SEARCH INTEGRATION
+class WebSearchIntegration {
+  constructor() {
+    this.config = WEB_SEARCH_CONFIG;
+    this.isAvailable = this.config.enabled && this.config.apiKey;
+    if (this.isAvailable) {
+      console.log('🔍 Intelligent Web Search integration initialized');
+    }
+  }
+
+  // Intelligent decision engine - determines if web search is needed
+  shouldSearchWeb(message, context = {}) {
+    if (!this.isAvailable) return false;
+
+    const content = message.toLowerCase();
+    
+    // Time-sensitive keywords that likely need current information
+    const timeSensitiveKeywords = [
+      'latest', 'recent', 'current', 'today', 'yesterday', 'this week', 'now',
+      'breaking', 'news', 'update', 'happened', 'score', 'result', 'winner',
+      'rankings', 'standings', 'schedule', 'injury report', 'transfer portal',
+      'recruiting', 'coaching changes', 'playoff', 'bowl games'
+    ];
+
+    // Current events and real-time data requests
+    const realTimeIndicators = [
+      'who won', 'what happened', 'final score', 'game result', 'live score',
+      'injury update', 'roster changes', 'coaching news', 'transfer news',
+      'recruitment', 'commit', 'decommit', 'portal', 'draft', 'nfl'
+    ];
+
+    // Questions that likely need factual verification
+    const factualQuestions = [
+      'what is', 'who is', 'when did', 'where is', 'how many', 'did they',
+      'has he', 'have they', 'is it true', 'fact check', 'verify'
+    ];
+
+    // College football specific real-time needs
+    const cfbRealTime = [
+      'college football playoff', 'cfp', 'sec championship', 'big ten championship',
+      'heisman', 'all american', 'coach of the year', 'bowl selection',
+      'conference standings', 'playoff rankings', 'ap poll', 'coaches poll'
+    ];
+
+    // Check for time-sensitive content
+    const hasTimeSensitive = timeSensitiveKeywords.some(keyword => content.includes(keyword));
+    const hasRealTime = realTimeIndicators.some(indicator => content.includes(indicator));
+    const hasFactual = factualQuestions.some(question => content.includes(question));
+    const hasCFBRealTime = cfbRealTime.some(term => content.includes(term));
+
+    // Scoring system for search necessity
+    let searchScore = 0;
+    if (hasTimeSensitive) searchScore += 3;
+    if (hasRealTime) searchScore += 4;
+    if (hasFactual) searchScore += 2;
+    if (hasCFBRealTime) searchScore += 3;
+
+    // Additional context scoring
+    if (content.includes('?')) searchScore += 1; // Questions more likely to need search
+    if (content.length > 50) searchScore += 1; // Longer queries often need real data
+
+    // Decision threshold
+    const shouldSearch = searchScore >= 3;
+
+    if (FEATURES.enhancedLogging && shouldSearch) {
+      console.log(`🧠 Web search decision: YES (score: ${searchScore})`);
+      console.log(`   Time-sensitive: ${hasTimeSensitive}, Real-time: ${hasRealTime}, Factual: ${hasFactual}, CFB: ${hasCFBRealTime}`);
+    }
+
+    return shouldSearch;
+  }
+
+  // Extract optimal search query from user message
+  extractSearchQuery(message) {
+    const content = message.toLowerCase();
+    
+    // Remove conversational elements and extract core query
+    const cleanQuery = content
+      .replace(/^(hey scout|scout|hi|hello|yo)\s*[,:]?\s*/i, '')
+      .replace(/\b(please|can you|could you|would you|tell me|let me know)\b/gi, '')
+      .replace(/\b(about|regarding|concerning)\b/gi, '')
+      .replace(/[?!.]+$/, '')
+      .trim();
+
+    // For college football, enhance the query with relevant context
+    if (this.isCFBRelated(content)) {
+      return this.enhanceCFBQuery(cleanQuery);
+    }
+
+    return cleanQuery || message; // Fallback to original if cleaning went too far
+  }
+
+  isCFBRelated(content) {
+    const cfbTerms = [
+      'college football', 'cfb', 'ncaa football', 'sec', 'big ten', 'acc', 'big 12', 'pac-12',
+      'alabama', 'georgia', 'texas', 'michigan', 'ohio state', 'clemson', 'notre dame',
+      'heisman', 'playoff', 'bowl game', 'championship', 'recruiting', 'transfer portal'
+    ];
+    return cfbTerms.some(term => content.includes(term));
+  }
+
+  enhanceCFBQuery(query) {
+    // Add college football context to improve search results
+    if (!query.includes('college football') && !query.includes('cfb')) {
+      return `${query} college football 2025`;
+    }
+    return query;
+  }
+
+  async searchWeb(query, options = {}) {
+    if (!this.isAvailable) {
+      return { error: 'Web search not available', results: [] };
+    }
+
+    try {
+      const searchParams = new URLSearchParams({
+        q: query,
+        count: options.maxResults || 8, // Get more results for ranking
+        safeSearch: options.safeSearch || this.config.safeSearch,
+        responseFilter: 'webPages',
+        textFormat: 'Raw'
+      });
+
+      const response = await axios.get(`${this.config.endpoint}?${searchParams}`, {
+        headers: {
+          'Ocp-Apim-Subscription-Key': this.config.apiKey,
+          'Accept': 'application/json'
+        },
+        timeout: 10000
+      });
+
+      const data = response.data;
+      const rawResults = data.webPages?.value || [];
+
+      // Apply intelligent ranking
+      const rankedResults = this.rankSearchResults(rawResults, query);
+
+      return {
+        success: true,
+        query: query,
+        results: rankedResults,
+        totalResults: data.webPages?.totalEstimatedMatches || 0
+      };
+
+    } catch (error) {
+      console.error('🔍 Web search error:', error);
+      return { 
+        error: `Search failed: ${error.message}`, 
+        results: [] 
+      };
+    }
+  }
+
+  // Intelligent result ranking system
+  rankSearchResults(results, originalQuery) {
+    const queryTerms = originalQuery.toLowerCase().split(' ').filter(term => term.length > 2);
+    
+    return results.map(result => {
+      let relevanceScore = 0;
+      const title = result.name?.toLowerCase() || '';
+      const snippet = result.snippet?.toLowerCase() || '';
+      const url = result.url?.toLowerCase() || '';
+
+      // Scoring factors
+      queryTerms.forEach(term => {
+        // Title matches (highest weight)
+        if (title.includes(term)) relevanceScore += 5;
+        
+        // Snippet matches (medium weight)
+        if (snippet.includes(term)) relevanceScore += 3;
+        
+        // URL matches (lower weight)
+        if (url.includes(term)) relevanceScore += 1;
+      });
+
+      // Bonus for authoritative sources
+      const authoritativeDomains = [
+        'espn.com', 'sports.yahoo.com', 'si.com', 'bleacherreport.com',
+        'cbssports.com', 'foxsports.com', 'nfl.com', 'ncaa.com',
+        'sec.com', 'bigten.org', 'acc.org', 'big12sports.com'
+      ];
+      
+      if (authoritativeDomains.some(domain => url.includes(domain))) {
+        relevanceScore += 4;
+      }
+
+      // Bonus for recent content indicators
+      const recentIndicators = ['2025', '2024', 'latest', 'breaking', 'update'];
+      if (recentIndicators.some(indicator => title.includes(indicator) || snippet.includes(indicator))) {
+        relevanceScore += 2;
+      }
+
+      return {
+        ...result,
+        relevanceScore,
+        title: result.name,
+        snippet: result.snippet
+      };
+    })
+    .sort((a, b) => b.relevanceScore - a.relevanceScore)
+    .slice(0, 3); // Return top 3 most relevant results
+  }
+
+  // Format search results for Scout's response
+  formatSearchResults(searchResponse, integrateWithResponse = true) {
+    if (searchResponse.error) {
+      return null; // Let Scout handle without search results
+    }
+
+    if (!searchResponse.results || searchResponse.results.length === 0) {
+      return null; // No results found, let Scout respond normally
+    }
+
+    const topResults = searchResponse.results.slice(0, 3);
+    let formattedInfo = '';
+
+    topResults.forEach((result, index) => {
+      formattedInfo += `**${result.title}**\n${result.snippet}\n`;
+      if (index < topResults.length - 1) formattedInfo += '\n';
+    });
+
+    return {
+      searchInfo: formattedInfo,
+      sources: topResults.map(r => r.url),
+      query: searchResponse.query
+    };
+  }
+}
+
+// 📊 PHASE 2: REAL-TIME DATA INTEGRATION HANDLERS (Coming Soon)
+class RealTimeDataIntegration {
+  constructor() {
+    this.config = REAL_TIME_DATA_CONFIG;
+    this.isAvailable = this.config.enabled;
+    // Implementation will be added in Phase 2
+  }
+}
+
+// 🏈 PHASE 3: COLLEGE FOOTBALL INTEGRATION HANDLERS (Coming Soon)  
+class CollegeFootballIntegration {
+  constructor() {
+    this.config = COLLEGE_FOOTBALL_CONFIG;
+    this.isAvailable = this.config.enabled;
+    // Implementation will be added in Phase 3
+  }
+}
+
+// Initialize integration modules
+const webSearch = new WebSearchIntegration();
+const realTimeData = new RealTimeDataIntegration();
+const collegeFootball = new CollegeFootballIntegration();
 
 // WhatsApp-style Message Monitor with Optional Resilience Features
 class WhatsAppMonitor {
@@ -235,23 +551,63 @@ class WhatsAppMonitor {
     console.log(`🤖 Getting AI response for: "${message}"`);
     
     try {
+      // Phase 1: Intelligent Web Search Integration
+      let searchContext = '';
+      let searchSources = [];
+      
+      if (FEATURES.webSearch && webSearch.shouldSearchWeb(message)) {
+        if (FEATURES.enhancedLogging) {
+          console.log('🧠 AI determined web search is needed');
+        }
+        
+        const searchQuery = webSearch.extractSearchQuery(message);
+        const searchResponse = await webSearch.searchWeb(searchQuery);
+        const searchResults = webSearch.formatSearchResults(searchResponse);
+        
+        if (searchResults) {
+          searchContext = `\n\nCURRENT WEB INFORMATION for "${searchQuery}":\n${searchResults.searchInfo}`;
+          searchSources = searchResults.sources;
+          
+          if (FEATURES.enhancedLogging) {
+            console.log(`🔍 Web search completed: ${searchResponse.results?.length || 0} results integrated`);
+          }
+        }
+      }
+
       const completion = await openai.chat.completions.create({
         model: process.env.AZURE_OPENAI_DEPLOYMENT,
         messages: [
           {
             role: "system",
-            content: `You are Scout, a friendly college football enthusiast who loves chatting about CFB in Discord. You're responding naturally in a group chat like WhatsApp - keep it casual, fun, and friend-like. Use emojis, be enthusiastic about college football, and respond as if you're just hanging out with friends. Keep responses concise (1-3 sentences max) unless asked for detailed analysis. The user's name is ${userName}.`
+            content: `You are Scout, a friendly college football enthusiast who loves chatting about CFB in Discord. You're responding naturally in a group chat like WhatsApp - keep it casual, fun, and friend-like. Use emojis, be enthusiastic about college football, and respond as if you're just hanging out with friends.
+
+IMPORTANT: If you receive current web information, integrate it naturally into your response without explicitly mentioning "web search" or "I searched." Present the information as if you naturally know it. Keep responses concise (1-3 sentences max for casual chat, longer if detailed analysis is requested).
+
+The user's name is ${userName}.${searchContext}`
           },
           {
             role: "user", 
             content: message
           }
         ],
-        max_tokens: 150,
+        max_tokens: searchContext ? 250 : 150, // More tokens when we have search context
         temperature: 0.8
       });
       
-      const response = completion.choices[0].message.content.trim();
+      let response = completion.choices[0].message.content.trim();
+      
+      // If we used web search and have authoritative sources, subtly reference them
+      if (searchSources.length > 0 && response.length > 100) {
+        const hasNewsSource = searchSources.some(url => 
+          url.includes('espn.com') || url.includes('sports.yahoo.com') || 
+          url.includes('si.com') || url.includes('cbssports.com')
+        );
+        
+        if (hasNewsSource && !response.includes('📰') && !response.includes('🔗')) {
+          response += ' 📰';
+        }
+      }
+      
       console.log(`✅ AI response generated: "${response}"`);
       return response;
       
