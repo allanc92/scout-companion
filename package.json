@@ -6,6 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
+    "start-resilient": "node index-resilient.js",
     "diagnostic": "node azure-startup-diagnostic.js"
   },
   "repository": {
