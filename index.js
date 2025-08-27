@@ -58,11 +58,11 @@ console.log('🤖 Azure OpenAI configured for GPT-5');
 // Phase 1: Web Search Integration
 const WEB_SEARCH_CONFIG = {
   enabled: FEATURES.webSearch,
-  provider: 'bing',
-  apiKey: process.env.BING_SEARCH_API_KEY,
-  endpoint: process.env.BING_SEARCH_ENDPOINT || 'https://api.bing.microsoft.com/v7.0/search',
+  provider: 'serpapi',
+  apiKey: process.env.SERPAPI_KEY,
+  endpoint: 'https://serpapi.com/search.json',
   maxResults: 5,
-  safeSearch: 'Moderate'
+  safeSearch: 'active'
 };
 
 // Phase 2: Real-time Data Integration  
@@ -225,24 +225,21 @@ class WebSearchIntegration {
     }
 
     try {
-      const searchParams = new URLSearchParams({
+      const searchParams = {
         q: query,
-        count: options.maxResults || 8, // Get more results for ranking
-        safeSearch: options.safeSearch || this.config.safeSearch,
-        responseFilter: 'webPages',
-        textFormat: 'Raw'
-      });
+        engine: 'google',
+        api_key: this.config.apiKey,
+        num: options.maxResults || 8, // Get more results for ranking
+        safe: this.config.safeSearch
+      };
 
-      const response = await axios.get(`${this.config.endpoint}?${searchParams}`, {
-        headers: {
-          'Ocp-Apim-Subscription-Key': this.config.apiKey,
-          'Accept': 'application/json'
-        },
+      const response = await axios.get(this.config.endpoint, {
+        params: searchParams,
         timeout: 10000
       });
 
       const data = response.data;
-      const rawResults = data.webPages?.value || [];
+      const rawResults = data.organic_results || [];
 
       // Apply intelligent ranking
       const rankedResults = this.rankSearchResults(rawResults, query);
@@ -251,7 +248,7 @@ class WebSearchIntegration {
         success: true,
         query: query,
         results: rankedResults,
-        totalResults: data.webPages?.totalEstimatedMatches || 0
+        totalResults: data.search_information?.total_results || 0
       };
 
     } catch (error) {
@@ -269,9 +266,9 @@ class WebSearchIntegration {
     
     return results.map(result => {
       let relevanceScore = 0;
-      const title = result.name?.toLowerCase() || '';
+      const title = result.title?.toLowerCase() || '';
       const snippet = result.snippet?.toLowerCase() || '';
-      const url = result.url?.toLowerCase() || '';
+      const link = result.link?.toLowerCase() || '';
 
       // Scoring factors
       queryTerms.forEach(term => {
@@ -282,7 +279,7 @@ class WebSearchIntegration {
         if (snippet.includes(term)) relevanceScore += 3;
         
         // URL matches (lower weight)
-        if (url.includes(term)) relevanceScore += 1;
+        if (link.includes(term)) relevanceScore += 1;
       });
 
       // Bonus for authoritative sources
@@ -292,7 +289,7 @@ class WebSearchIntegration {
         'sec.com', 'bigten.org', 'acc.org', 'big12sports.com'
       ];
       
-      if (authoritativeDomains.some(domain => url.includes(domain))) {
+      if (authoritativeDomains.some(domain => link.includes(domain))) {
         relevanceScore += 4;
       }
 
@@ -303,10 +300,10 @@ class WebSearchIntegration {
       }
 
       return {
-        ...result,
-        relevanceScore,
-        title: result.name,
-        snippet: result.snippet
+        title: result.title,
+        snippet: result.snippet,
+        url: result.link,
+        relevanceScore
       };
     })
     .sort((a, b) => b.relevanceScore - a.relevanceScore)
