@@ -19,6 +19,15 @@ class ScoutConnectionManager {
       this.handleDisconnection();
     });
     
+    // Handle WebSocket close events (more reliable than disconnect)
+    this.client.ws.on('close', (event) => {
+      console.warn(`🔌 WebSocket closed! Code: ${event.code}, Reason: ${event.reason}`);
+      if (!this.client.readyAt) {
+        console.log('🔄 Triggering reconnection from WebSocket close...');
+        this.handleDisconnection();
+      }
+    });
+    
     // Handle connection errors
     this.client.on('error', (error) => {
       console.error('❌ Discord client error:', error);
@@ -30,29 +39,28 @@ class ScoutConnectionManager {
       }
     });
     
-    // Handle reconnection success
+    // Handle ready state loss
     this.client.on('ready', () => {
       if (this.reconnectAttempts > 0) {
-        console.log(`🎉 Scout reconnected successfully after ${this.reconnectAttempts} attempts!`);
+        console.log(`✅ Successfully reconnected after ${this.reconnectAttempts} attempts!`);
+        this.reconnectAttempts = 0;
+        this.isReconnecting = false;
       }
-      this.reconnectAttempts = 0;
-      this.isReconnecting = false;
     });
     
-    // Handle rate limit warnings
-    this.client.rest.on('rateLimited', (info) => {
-      console.warn(`⏰ Rate limited for ${info.timeToReset}ms on route ${info.route}`);
-    });
+    // Monitor connection health with periodic checks
+    setInterval(() => {
+      if (this.client.readyAt && this.client.ws.ping > 30000) {
+        console.warn(`⚠️ High ping detected: ${this.client.ws.ping}ms - potential connection issue`);
+      }
+      
+      if (!this.client.readyAt && !this.isReconnecting) {
+        console.warn('🚨 Client not ready and not reconnecting - forcing reconnection');
+        this.handleDisconnection();
+      }
+    }, 30000); // Check every 30 seconds
     
-    // Handle WebSocket errors
-    this.client.ws.on('error', (error) => {
-      console.error('❌ WebSocket error:', error);
-    });
-    
-    // Handle connection resumed
-    this.client.on('resume', (replayed) => {
-      console.log(`🔄 Connection resumed, replayed ${replayed} events`);
-    });
+    console.log('🛡️ Enhanced connection monitoring active');
   }
   
   async handleDisconnection() {
