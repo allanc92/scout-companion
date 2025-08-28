@@ -5,11 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index.js",
-    "build": "npm install --production",
-    "install": "npm install",
-    "prestart": "npm install --production",
-    "postinstall": "echo 'Dependencies installed successfully'"
+    "start": "node index.js"
   },
   "engines": {
     "node": "20.x",
