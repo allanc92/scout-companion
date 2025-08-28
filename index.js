@@ -3,6 +3,8 @@ require('dotenv').config();
 
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const { OpenAI } = require('openai');
+const https = require('https');
+const { URL } = require('url');
 
 // 🎯 FEATURE FLAGS CONFIGURATION
 const FEATURES = {
@@ -11,7 +13,8 @@ const FEATURES = {
   testingMode: process.env.TESTING_MODE === 'true',
   healthEndpoint: process.env.ENABLE_HEALTH_ENDPOINT === 'true',
   enhancedLogging: process.env.ENHANCED_LOGGING === 'true',
-  featureBranch: process.env.FEATURE_BRANCH || 'main'
+  featureBranch: process.env.FEATURE_BRANCH || 'main',
+  webSearch: process.env.ENABLE_WEB_SEARCH === 'true'
 };
 
 // Log feature flag status
@@ -45,6 +48,112 @@ const openai = new OpenAI({
 });
 
 console.log('🤖 Azure OpenAI configured for GPT-5');
+
+// 🌐 Web Search Functions (using built-in Node.js modules)
+function makeHttpsRequest(url, params = {}) {
+  return new Promise((resolve, reject) => {
+    const queryString = Object.keys(params).map(key => 
+      `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`
+    ).join('&');
+    
+    const fullUrl = `${url}?${queryString}`;
+    const urlObj = new URL(fullUrl);
+    
+    const options = {
+      hostname: urlObj.hostname,
+      path: urlObj.pathname + urlObj.search,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Scout-Discord-Bot/1.0'
+      }
+    };
+    
+    console.log('🔗 Making web search request...');
+    
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          console.error('❌ JSON Parse Error:', e.message);
+          resolve({ error: 'Invalid JSON response' });
+        }
+      });
+    });
+    
+    req.on('error', (error) => {
+      console.error('❌ HTTPS Request Error:', error.message);
+      reject(error);
+    });
+    
+    req.setTimeout(5000, () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
+    
+    req.end();
+  });
+}
+
+async function performWebSearch(query) {
+  if (!FEATURES.webSearch) {
+    console.log('🔍 Web search disabled by feature flag');
+    return null;
+  }
+  
+  if (!process.env.SERPAPI_KEY) {
+    console.log('🔍 No SERPAPI_KEY found, skipping web search');
+    return null;
+  }
+  
+  try {
+    console.log('🔍 Performing web search for:', query);
+    
+    const response = await makeHttpsRequest('https://serpapi.com/search.json', {
+      api_key: process.env.SERPAPI_KEY,
+      engine: 'google',
+      q: query,
+      num: 3
+    });
+    
+    if (response.error) {
+      console.error('❌ SerpAPI error:', response.error);
+      return null;
+    }
+    
+    const results = response.organic_results || [];
+    const processedResults = results.slice(0, 3).map(result => ({
+      title: result.title,
+      snippet: result.snippet,
+      url: result.link
+    }));
+    
+    console.log('✅ Found', processedResults.length, 'search results');
+    return processedResults;
+    
+  } catch (error) {
+    console.error('❌ Web search error:', error.message);
+    return null;
+  }
+}
+
+function shouldSearchWeb(message) {
+  if (!FEATURES.webSearch) return false;
+  
+  const searchKeywords = [
+    'latest', 'recent', 'current', 'today', 'yesterday', 'this week',
+    'who won', 'score', 'game result', 'standings', 'ranking',
+    'news', 'update', 'breaking', 'live'
+  ];
+  
+  const messageText = message.toLowerCase();
+  const shouldSearch = searchKeywords.some(keyword => messageText.includes(keyword));
+  
+  console.log(`🤔 Should search for "${message}"? ${shouldSearch ? '✅ YES' : '❌ NO'}`);
+  return shouldSearch;
+}
 
 // WhatsApp-style Message Monitor with Optional Resilience Features
 class WhatsAppMonitor {
@@ -235,12 +344,28 @@ class WhatsAppMonitor {
     console.log(`🤖 Getting AI response for: "${message}"`);
     
     try {
+      // Check if web search is needed for this message
+      let searchResults = [];
+      if (shouldSearchWeb(message)) {
+        console.log('🔍 WhatsApp trigger detected web search need');
+        searchResults = await performWebSearch(message);
+      }
+      
+      // Build system message with potential search results
+      let systemContent = `You are Scout, a friendly college football enthusiast who loves chatting about CFB in Discord. You're responding naturally in a group chat like WhatsApp - keep it casual, fun, and friend-like. Use emojis, be enthusiastic about college football, and respond as if you're just hanging out with friends. Keep responses concise (1-3 sentences max) unless asked for detailed analysis. The user's name is ${userName}.`;
+      
+      if (searchResults && searchResults.length > 0) {
+        systemContent += `\n\n🔍 CURRENT WEB SEARCH RESULTS:\n${searchResults.map((result, i) => 
+          `${i+1}. ${result.title}\n   ${result.snippet}\n   ${result.url}`
+        ).join('\n\n')}\n\nUse this current information to provide an up-to-date response.`;
+      }
+      
       const completion = await openai.chat.completions.create({
         model: process.env.AZURE_OPENAI_DEPLOYMENT,
         messages: [
           {
             role: "system",
-            content: `You are Scout, a friendly college football enthusiast who loves chatting about CFB in Discord. You're responding naturally in a group chat like WhatsApp - keep it casual, fun, and friend-like. Use emojis, be enthusiastic about college football, and respond as if you're just hanging out with friends. Keep responses concise (1-3 sentences max) unless asked for detailed analysis. The user's name is ${userName}.`
+            content: systemContent
           },
           {
             role: "user", 
@@ -528,15 +653,29 @@ client.on('interactionCreate', async (interaction) => {
         console.log(`🎯 Scout command: "${prompt}"`);
       }
       
+      // 🌐 Check if web search is needed and perform it
+      let searchResults = null;
+      if (shouldSearchWeb(prompt)) {
+        searchResults = await performWebSearch(prompt);
+      }
+      
       try {
         if (FEATURES.connectionResilience) {
           // Enhanced AI call with timeout protection
+          let systemContent = "You are Scout, a knowledgeable and enthusiastic college football companion. Provide helpful, friendly responses about college football topics. Be conversational and use emojis appropriately.";
+          
+          if (searchResults && searchResults.length > 0) {
+            systemContent += `\n\n🔍 CURRENT WEB SEARCH RESULTS:\n${searchResults.map((result, i) => 
+              `${i+1}. ${result.title}\n   ${result.snippet}\n   ${result.url}`
+            ).join('\n\n')}\n\nUse this current information to provide an up-to-date response.`;
+          }
+          
           const aiPromise = openai.chat.completions.create({
             model: process.env.AZURE_OPENAI_DEPLOYMENT,
             messages: [
               {
                 role: "system",
-                content: "You are Scout, a knowledgeable and enthusiastic college football companion. Provide helpful, friendly responses about college football topics. Be conversational and use emojis appropriately."
+                content: systemContent
               },
               {
                 role: "user", 
@@ -557,12 +696,20 @@ client.on('interactionCreate', async (interaction) => {
           
         } else {
           // Standard AI call (current production behavior)
+          let systemContent = "You are Scout, a knowledgeable and enthusiastic college football companion. Provide helpful, friendly responses about college football topics. Be conversational and use emojis appropriately.";
+          
+          if (searchResults && searchResults.length > 0) {
+            systemContent += `\n\n🔍 CURRENT WEB SEARCH RESULTS:\n${searchResults.map((result, i) => 
+              `${i+1}. ${result.title}\n   ${result.snippet}\n   ${result.url}`
+            ).join('\n\n')}\n\nUse this current information to provide an up-to-date response.`;
+          }
+          
           const completion = await openai.chat.completions.create({
             model: process.env.AZURE_OPENAI_DEPLOYMENT,
             messages: [
               {
                 role: "system",
-                content: "You are Scout, a knowledgeable and enthusiastic college football companion. Provide helpful, friendly responses about college football topics. Be conversational and use emojis appropriately."
+                content: systemContent
               },
               {
                 role: "user", 
