@@ -1,6 +1,6 @@
 {
   "name": "scout-companion",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Welcome to **Scout**, the AI-powered sports buddy who brings *banter, brains, and heart* to every college football conversation. Scout isn't just a bot — it's a fan-savvy friend who knows the rivalries, reads the room, and delivers takes with personality.",
   "main": "index.js",
   "scripts": {
@@ -24,5 +24,9 @@
     "discord.js": "^14.22.1",
     "dotenv": "^17.2.1",
     "openai": "^5.15.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   }
 }
