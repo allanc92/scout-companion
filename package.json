@@ -9,6 +9,10 @@
     "build": "npm install",
     "postinstall": "echo 'Dependencies installed successfully'"
   },
+  "engines": {
+    "node": "20.x",
+    "npm": "10.x"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/allanc92/scout-companion.git"
