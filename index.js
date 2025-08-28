@@ -3,6 +3,7 @@ require('dotenv').config();
 
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const { OpenAI } = require('openai');
+const axios = require('axios');
 
 // 🎯 FEATURE FLAGS CONFIGURATION
 const FEATURES = {
@@ -11,7 +12,8 @@ const FEATURES = {
   testingMode: process.env.TESTING_MODE === 'true',
   healthEndpoint: process.env.ENABLE_HEALTH_ENDPOINT === 'true',
   enhancedLogging: process.env.ENHANCED_LOGGING === 'true',
-  featureBranch: process.env.FEATURE_BRANCH || 'main'
+  featureBranch: process.env.FEATURE_BRANCH || 'main',
+  webSearch: process.env.ENABLE_WEB_SEARCH === 'true'
 };
 
 // Log feature flag status
@@ -45,6 +47,47 @@ const openai = new OpenAI({
 });
 
 console.log('🤖 Azure OpenAI configured for GPT-5');
+
+// 🌐 Simple Web Search Function (SerpAPI)
+async function performWebSearch(query) {
+  if (!FEATURES.webSearch || !process.env.SERPAPI_KEY) {
+    return null;
+  }
+  
+  try {
+    const response = await axios.get('https://serpapi.com/search.json', {
+      params: {
+        api_key: process.env.SERPAPI_KEY,
+        engine: 'google',
+        q: query,
+        num: 3
+      }
+    });
+    
+    const results = response.data.organic_results || [];
+    return results.slice(0, 3).map(result => ({
+      title: result.title,
+      snippet: result.snippet,
+      url: result.link
+    }));
+  } catch (error) {
+    console.error('🔍 Web search error:', error.message);
+    return null;
+  }
+}
+
+// Simple function to detect if web search is needed
+function shouldSearchWeb(message) {
+  if (!FEATURES.webSearch) return false;
+  
+  const searchKeywords = [
+    'latest', 'recent', 'current', 'today', 'yesterday', 'this week',
+    'who won', 'score', 'game result', 'standings', 'ranking'
+  ];
+  
+  const messageText = message.toLowerCase();
+  return searchKeywords.some(keyword => messageText.includes(keyword));
+}
 
 // WhatsApp-style Message Monitor with Optional Resilience Features
 class WhatsAppMonitor {
@@ -528,15 +571,25 @@ client.on('interactionCreate', async (interaction) => {
         console.log(`🎯 Scout command: "${prompt}"`);
       }
       
+      // 🌐 Check if web search is needed
+      let searchResults = null;
+      if (shouldSearchWeb(prompt)) {
+        console.log('🔍 Performing web search for:', prompt);
+        searchResults = await performWebSearch(prompt);
+      }
+      
       try {
         if (FEATURES.connectionResilience) {
           // Enhanced AI call with timeout protection
+          const systemContent = "You are Scout, a knowledgeable and enthusiastic college football companion. Provide helpful, friendly responses about college football topics. Be conversational and use emojis appropriately." + 
+            (searchResults ? `\n\nCurrent web search results: ${JSON.stringify(searchResults)}` : "");
+          
           const aiPromise = openai.chat.completions.create({
             model: process.env.AZURE_OPENAI_DEPLOYMENT,
             messages: [
               {
                 role: "system",
-                content: "You are Scout, a knowledgeable and enthusiastic college football companion. Provide helpful, friendly responses about college football topics. Be conversational and use emojis appropriately."
+                content: systemContent
               },
               {
                 role: "user", 
@@ -557,12 +610,15 @@ client.on('interactionCreate', async (interaction) => {
           
         } else {
           // Standard AI call (current production behavior)
+          const systemContent = "You are Scout, a knowledgeable and enthusiastic college football companion. Provide helpful, friendly responses about college football topics. Be conversational and use emojis appropriately." + 
+            (searchResults ? `\n\nCurrent web search results: ${JSON.stringify(searchResults)}` : "");
+            
           const completion = await openai.chat.completions.create({
             model: process.env.AZURE_OPENAI_DEPLOYMENT,
             messages: [
               {
                 role: "system",
-                content: "You are Scout, a knowledgeable and enthusiastic college football companion. Provide helpful, friendly responses about college football topics. Be conversational and use emojis appropriately."
+                content: systemContent
               },
               {
                 role: "user", 
